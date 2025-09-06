@@ -5,6 +5,40 @@ import prisma from "./client";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
+// Helper function to ensure user exists in database
+async function ensureUserExists() {
+  const { userId } = auth();
+  
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  try {
+    // Check if user exists in database
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      // Create user if doesn't exist
+      const newUser = await prisma.user.create({
+        data: {
+          id: userId,
+          username: `user_${userId.slice(0, 8)}`, // Fallback username
+          avatar: "/noAvatar.png",
+          cover: "/noCover.png",
+        },
+      });
+      return newUser;
+    }
+
+    return existingUser;
+  } catch (error) {
+    console.error("Error ensuring user exists:", error);
+    throw error;
+  }
+}
+
 export const switchFollow = async (userId: string) => {
   const { userId: currentUserId } = auth();
 
@@ -271,6 +305,10 @@ export const addPost = async (formData: FormData, img: string) => {
     console.log("description is not valid");
     return;
   }
+
+  // Ensure user exists in database before creating post
+  await ensureUserExists();
+
   const { userId } = auth();
 
   if (!userId) throw new Error("User is not authenticated!");
@@ -291,6 +329,9 @@ export const addPost = async (formData: FormData, img: string) => {
 };
 
 export const addStory = async (img: string) => {
+  // Ensure user exists in database before creating story
+  await ensureUserExists();
+
   const { userId } = auth();
 
   if (!userId) throw new Error("User is not authenticated!");
